@@ -248,14 +248,36 @@ class LineDetector:
     y_step = 100
     
     def sliding_window_step(self, image, start_x, end_y, x_search_region = 100):
+        """
+        Calculates one step of the sliding window algorithm
+
+        Parameters
+        ----------
+        image : numpy array
+            The image to process
+        start_x: integer
+            x coordinate - where to start searching in horizontal direction
+        end_y: integer
+            y coordinate - the end of the search region, defined as [end_y-self.y_step:end_y]
+        x_search_region: integer
+            how wide is the search region horizontally
+        Returns
+        -------
+        next_step_x : integer
+            Starting x coordinate for the next iteration
+        start_y: integer
+            Starting y coordinate for the next iteration
+        """
         arr = np.empty((2 * x_search_region))
         
+        #Finds the regions with most points
         start_y = np.max((end_y - self.y_step, 0))
         for i in range(- x_search_region, x_search_region):
             x_start = int(start_x + i - self.x_size)
             x_end = int(start_x + i + self.x_size)
             arr[x_search_region + i] = np.sum(image[start_y:end_y, x_start:x_end])
-            
+        
+        #Filters noise, keeps the sliding window the same as previous iteration
         if np.argmax(arr) < 20:
             next_step_x = start_x
         else:
@@ -264,27 +286,52 @@ class LineDetector:
         return next_step_x, start_y
         
     def sliding_window_one_side(self, image, start_x, output, func=None):
+        """
+        Applies the sliding window algorithm for one line, starting from start_x
+
+        Parameters
+        ----------
+        image : numpy array
+            The image to process
+        start_x: integer
+            x coordinate - where to start searching in horizontal direction
+        output: numpy array
+            used for outputting debug data
+        func: function
+            estimates line position using data from previous frames
+        Returns
+        -------
+        indicies : numpy array
+            Array that contains the coordinates of the points inside the sliding windows
+        """
         indicies_x = []
         indicies_y = []
         
         current_step_x = start_x
         current_step_y = image.shape[0]
         
+        #Debugging - draws the current window
         cv2.rectangle(output, (int(start_x - self.x_size), current_step_y), 
                               (int(start_x + self.x_size), current_step_y - self.y_step), 1, thickness=15)
         
+        #While we haven't reached the top of the image
         while current_step_y > 0:
+            #Do we have data from previous frames
             if func != None:
                 current_step_x = func(current_step_y)
                 next_step_x, next_step_y = self.sliding_window_step(image, current_step_x, current_step_y, 50)
             else:
                 next_step_x, next_step_y = self.sliding_window_step(image, current_step_x, current_step_y)
             
+            #Gets the part of the image for the current window
             arr = image[next_step_y: current_step_y, next_step_x - self.x_size: next_step_x + self.x_size]
+            
+            #Gets the indicies for all the white points and adds them to the result arrays
             current_indicies = np.where( arr == 1)
             indicies_y.append(current_indicies[0] +  next_step_y)
             indicies_x.append(current_indicies[1] +  (next_step_x - self.x_size))
             
+            #Debugging - draws the current window
             cv2.rectangle(output, (int(next_step_x - self.x_size), current_step_y), 
                                   (int(next_step_x + self.x_size), next_step_y), 1, thickness=5)
             current_step_x = next_step_x
@@ -293,6 +340,28 @@ class LineDetector:
         return np.array((np.concatenate(indicies_x), np.concatenate(indicies_y)), dtype='float64')
     
     def sliding_window(self, image, l_points_prev=None, r_points_prev=None, x_region=50):
+        """
+        Finds starting points for the sliding window algorithm and applies it for left and right lines
+
+        Parameters
+        ----------
+        image : numpy array
+            The image to process
+        l_points_prev: numpy array
+            left line points from previous frames
+        r_points_prev: numpy array
+            right line points from previous frames
+        x_region: integer
+            width of search regions, horizontally
+        Returns
+        -------
+        left_indicies : numpy array
+            Array that contains the coordinates of the points for the left line
+        right_indicies : numpy array
+            Array that contains the coordinates of the points for the right line  
+        output: numpy array
+            Image with debug information
+        """
         output = np.copy(image)
         
         
@@ -313,10 +382,37 @@ class LineDetector:
         return left_indicies, right_indicies, output
     
     def get_starting_points_previous(self, points):
+        """
+        Calculates a polyfit function from previous frames
+
+        Parameters
+        ----------
+        points : numpy array
+            The points discovered in previous frame
+        Returns
+        -------
+        func : function
+            A function for calculating the x coord of the line marking using the y coord
+        """
         polyfit = np.polyfit(points[1], points[0], 2)
         return lambda y: polyfit[0]*y**2 + polyfit[1]*y + polyfit[2]
         
     def get_starting_points_histogram(self, image, x_region=50):
+        """
+        Calculates starting points by using a histogram
+
+        Parameters
+        ----------
+        image : numpy array
+            The image to process
+        Returns
+        -------
+        start_left : integer
+            X coord - Where to start searching for left line marking
+        start_right: integer
+            X coord - Where to start searching for right line marking
+        """
+            
         histogram = np.sum(image[image.shape[0]/2:,:], axis=0)
         sliding_peaks = np.empty((histogram.shape[0]))
 
