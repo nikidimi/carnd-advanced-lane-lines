@@ -244,6 +244,15 @@ class ImageThresholder:
         return combined_hls, combined, hls_binary
     
 class LineDetector:
+    """
+    This class finds lines in a binary image using sliding window algorithm
+    
+    Attributes:
+    x_size: integer
+        Width of the sliding window
+    y_step: integer
+        Default step of the algorithm in vertical direction
+    """
     x_size = 30
     y_step = 100
     
@@ -424,11 +433,14 @@ class LineDetector:
         return start_left, start_right
         
 class VideoLineDrawer:
+    """
+    This class processes a video file and draws the detected line markings
+    """
     imageUndistortor = ImageUndistortor()    
     perspectiveTransformator = PerspectiveTransformator()
     lineDetector = LineDetector()
         
-
+    #Data from previous frames, Used for smoothing
     left_fit_prev = None
     right_fit_prev = None
     left_curverad_prev = None
@@ -436,16 +448,52 @@ class VideoLineDrawer:
     l_points = None
     r_points = None
 
-    ym_per_pix = 3/110 # meters per pixel in y dimension
-    xm_per_pix = 3.7/780 # meters per pixel in x dimension
+    # meters per pixel in x/y dimension
+    ym_per_pix = 3/110
+    xm_per_pix = 3.7/780
 
     def __init__(self):
+        """
+        Calibrates the undistorter first
+        """
         self.imageUndistortor.calibrate()
     
     def get_fitting_function(self, polyfit):
+        """
+        Returns a second degree function with the provided coefficients
+
+        Parameters
+        ----------
+        polyfit : numpy array
+            Coefficients for the function
+        Returns
+        -------
+        func : function
+            A function for calculating the x coord of the line marking using the y coord
+        """
         return lambda y: polyfit[0]*y**2 + polyfit[1]*y + polyfit[2]
     
     def calc_curvative(self, l_points, r_points):
+        """
+        Calculates curvatives and position of left and right line
+
+        Parameters
+        ----------
+        l_points: numpy array
+            left line points
+        r_points: numpy array
+            right line points
+        Returns
+        -------
+        left_curverad : number
+            Left curve radius
+        right_curverad : number
+            Right curve radius
+        left_x : number
+            Position of the left line
+        right_x : number
+            Position of the right line
+        """
         l_points = np.array(l_points)
         r_points = np.array(r_points)
         
@@ -463,11 +511,41 @@ class VideoLineDrawer:
         return left_curverad, right_curverad, left_x, right_x
     
     def transform_array(self, input_points):
+        """
+        Transform points back from transformed coordinate system
+
+        Parameters
+        ----------
+        input_points: numpy array
+            the points to transform
+        r_points: numpy array
+            right line points
+        Returns
+        -------
+        points : numpy array
+            The transformed points
+        """
         transposed = np.array(input_points).T
         points = transposed.reshape(1, transposed.shape[0], -1)
         return self.perspectiveTransformator.reverse_transform_points(points)[0].T
         
     def draw_line_markings(self, image, estimated, max_y_marking=450):
+        """
+        Draws line marking on image
+
+        Parameters
+        ----------
+        image: numpy array
+            the image to draw on
+        estimated: boolean
+            is the current frame estimated from previous ones because we couldn't detect the markings in this one
+        max_y_marking: number
+            where the line markings end in y coordinates
+        Returns
+        -------
+        output : numpy array
+            The image with the drawn lines
+        """
         y_distance = 720 - max_y_marking
         
         pts = np.empty((y_distance * 2, 2), np.int32)
@@ -485,19 +563,28 @@ class VideoLineDrawer:
             pts[index][0] = right_func(y_coord)
             pts[index][1] = y_coord
 
-        # Create an image to draw the lines on
         warp_zero = np.zeros_like(image).astype(np.uint8)
-
-
-        # Draw the lane onto the warped blank image
+        
+        #Change color to show estimated frames
         color = (0,255, 0)
         if estimated:
             color = (255,0, 0)
         cv2.fillPoly(warp_zero, [pts], color)
-        # Combine the result with the original image
+
         return cv2.addWeighted(image, 1, warp_zero, 0.3, 0)
         
     def get_points(self, image, output):
+        """
+        Applies different transformations and finds the points for the left/right lane line markings
+
+        Parameters
+        ----------
+        image: numpy array
+            the image to process
+        output: numpy array
+            Used for debugging, draws different stages on the output image
+
+        """
         undistorted = self.imageUndistortor.undistort(image)
         warped = self.perspectiveTransformator.transform(undistorted)
         binary, combined, hls_binary = ImageThresholder.combined(warped)
@@ -506,24 +593,26 @@ class VideoLineDrawer:
         
         output[720:1440, 0:1280, :] = warped
         
-        output[0:720, 1280:2560, 0] = binary*255
-        output[0:720, 1280:2560, 1] = binary*255
-        output[0:720, 1280:2560, 2] = binary*255
+        output[0:720, 1280:2560, :] = undistorted
         
         output[720:1440, 1280:2560, 0] = output_sliding*255
         output[720:1440, 1280:2560, 1] = output_sliding*255
         output[720:1440, 1280:2560, 2] = output_sliding*255
         
-        output[0:720, 2560:3840, 0] = combined*255
-        output[0:720, 2560:3840, 1] = combined*255
-        output[0:720, 2560:3840, 2] = combined*255
-        
-        output[720:1440, 2560:3840, 0] = hls_binary*255
-        output[720:1440, 2560:3840, 1] = hls_binary*255
-        output[720:1440, 2560:3840, 2] = hls_binary*255
-        
     def plot_image(self, image):
-        output = np.empty((1440, 3840, 3), dtype='uint8')
+        """
+        Processes one image and draws the lane lines on it
+        
+        Parameters
+        ----------
+        image: numpy array
+            the image to process
+        Returns
+        -------
+        output : numpy array
+            The image with the drawn lines
+        """
+        output = np.empty((1440, 2560, 3), dtype='uint8')
         
         self.get_points(image, output)
         left_curverad, right_curverad, left_x, right_x = self.calc_curvative(self.l_points, self.r_points)  
