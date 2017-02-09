@@ -6,7 +6,6 @@
 [image4]: ./output_images/wrap.jpg "Warp Example"
 [image5]: ./output_images/sliding_window.jpg "Fit Visual"
 [image6]: ./output_images/output.jpg "Output"
-[video1]: ./project_video.out.mp4 "Video"
 
 ###Writeup / README
 
@@ -82,7 +81,7 @@ The position of the vehicle is calculated by calculating the position of the lef
 
 ####1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./project_video.out.mp4)
 
 ---
 
