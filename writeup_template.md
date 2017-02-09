@@ -6,7 +6,7 @@
 [image4]: ./output_images/wrap.jpg "Warp Example"
 [image5]: ./output_images/sliding_window.jpg "Fit Visual"
 [image6]: ./output_images/output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
+[video1]: ./project_video.out.mp4 "Video"
 
 ###Writeup / README
 
