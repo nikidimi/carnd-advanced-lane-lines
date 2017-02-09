@@ -3,6 +3,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import glob
+import sys
 from moviepy.editor import VideoFileClip
 
 class ImageUndistortor:
@@ -657,6 +658,6 @@ class VideoLineDrawer:
   
 if __name__ == "__main__":
     ld = VideoLineDrawer()
-    clip = VideoFileClip("project_video.mp4")
+    clip = VideoFileClip(sys.argv[1])
     processed_clip = clip.fl_image(ld.plot_image)
     processed_clip.write_videofile("project_video.out.mp4", audio=False)
